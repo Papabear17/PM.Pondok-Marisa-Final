@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Build output (Electron build results)
+build-dist/
+dist/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/settings.json
+
+# Vercel (biarkan .vercel/project.json untuk config)
+.vercel/
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log

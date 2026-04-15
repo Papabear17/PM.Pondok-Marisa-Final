@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "buildCommand": null,
+  "outputDirectory": "renderer",
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/menu-digital",
+      "destination": "/menu-digital/index.html"
+    }
+  ]
+}
