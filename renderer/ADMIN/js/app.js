@@ -26,42 +26,77 @@ try {
 }
 
 const DB = {
+    _cache: {},
     async load(key) {
-        try {
-            if (db) {
-                const docSnap = await db.collection('PondokMarisaPOS').doc(key).get();
-                if (docSnap.exists) {
-                    return docSnap.data().data;
+        // Ambil secara instan dari lokal agar UI tidak lag
+        const raw = localStorage.getItem(key);
+        let localData = null;
+        if (raw) {
+            try { localData = JSON.parse(raw); } catch(e) {}
+        }
+
+        // Kalau ada Firebase, coba sinkron di background (non-blocking)
+        if (db) {
+            const fetchFirestore = async () => {
+                try {
+                    const docSnap = await db.collection('PondokMarisaPOS').doc(key).get({ source: 'default' });
+                    if (docSnap.exists) {
+                        const data = docSnap.data().data;
+                        localStorage.setItem(key, JSON.stringify(data));
+                        // Update in-memory cache
+                        DB._cache[key] = data; 
+                        return data;
+                    }
+                } catch(e) {
+                    console.warn(`[DB.load] lambat/error firebase untuk ${key}:`, e.message);
+                }
+                return null;
+            };
+
+            // Jika local kosong, tunggu max 3 detik. Kalau ada, biarkan sinkron background & return instan!
+            if (!localData) {
+                const result = await Promise.race([
+                    fetchFirestore(),
+                    new Promise((resolve) => setTimeout(() => resolve(null), 3000))
+                ]);
+                if (result) return result;
+            } else {
+                // Background update
+                fetchFirestore();
+            }
+        }
+        
+        return localData || getDefault(key);
+    },
+    
+    async save(key, data) {
+        // Optimistic update: simpan ke lokal instan
+        localStorage.setItem(key, JSON.stringify(data));
+        DB._cache[key] = data;
+
+        // Background sync tanpa await agar UI ga macet!
+        if (db) {
+            db.collection('PondokMarisaPOS').doc(key).set({
+                data: data,
+                updatedAt: new Date().toISOString()
+            }).catch(e => console.warn(`[DB.save] firebase gagal sinkron ${key}:`, e.message));
+        }
+
+        return true; // langsung true
+    },
+
+    listen(key, callback) {
+        if (!db) return;
+        return db.collection('PondokMarisaPOS').doc(key).onSnapshot((docSnap) => {
+            if (docSnap.exists) {
+                const data = docSnap.data().data;
+                const oldData = localStorage.getItem(key);
+                if (oldData !== JSON.stringify(data)) {
+                    localStorage.setItem(key, JSON.stringify(data));
+                    callback(data);
                 }
             }
-            // Offline fallback
-            const raw = localStorage.getItem(key);
-            if (raw) return JSON.parse(raw);
-            
-            return getDefault(key);
-        } catch (error) {
-            console.error("Error loading data for key: " + key, error);
-            const raw = localStorage.getItem(key);
-            if (raw) return JSON.parse(raw);
-            return getDefault(key);
-        }
-    },
-    async save(key, data) {
-        try {
-            if (db) {
-                await db.collection('PondokMarisaPOS').doc(key).set({
-                    data: data,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
-            }
-            // Local backup
-            localStorage.setItem(key, JSON.stringify(data));
-            return true;
-        } catch (error) {
-            console.error("Error saving data for key: " + key, error);
-            localStorage.setItem(key, JSON.stringify(data));
-            return false;
-        }
+        }, err => console.warn('Listen err:', err));
     }
 };
 

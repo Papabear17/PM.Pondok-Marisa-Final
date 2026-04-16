@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="id">
 
 <head>
@@ -117,8 +117,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                    <input id="searchTx" type="text" placeholder="Cari nomor faktur..."
-                        class="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 lg:w-56" />
+                    <input id="searchTx" type="text" placeholder="Cari nomor faktur..." class="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 lg:w-56" />
                 </div>
                 <div class="flex items-center gap-2 w-full sm:w-auto">
                     <label class="text-sm text-gray-500 w-16 sm:w-auto">Dari:</label>
@@ -308,16 +307,24 @@
             document.getElementById('modalDetail').classList.remove('flex');
         }
 
+        let filterTimeout;
         function applyFilter() {
-            const q = document.getElementById('searchTx').value.toLowerCase();
-            const from = document.getElementById('filterFrom').value;
-            const to = document.getElementById('filterTo').value;
-            let filtered = [...allTx].reverse();
-            if (q) filtered = filtered.filter(t => t.nomorFaktur.toLowerCase().includes(q));
-            if (from) filtered = filtered.filter(t => new Date(t.waktu) >= new Date(from));
-            if (to) filtered = filtered.filter(t => new Date(t.waktu) <= new Date(to + 'T23:59:59'));
-            renderTable(filtered);
+            clearTimeout(filterTimeout);
+            filterTimeout = setTimeout(() => {
+                const q = document.getElementById('searchTx').value.toLowerCase();
+                const from = document.getElementById('filterFrom').value;
+                const to = document.getElementById('filterTo').value;
+                let filtered = [...allTx].reverse();
+                if (q) filtered = filtered.filter(t => t.nomorFaktur.toLowerCase().includes(q));
+                if (from) filtered = filtered.filter(t => new Date(t.waktu) >= new Date(from));
+                if (to) filtered = filtered.filter(t => new Date(t.waktu) <= new Date(to + 'T23:59:59'));
+                renderTable(filtered);
+            }, 300);
         }
+
+        document.getElementById('searchTx').addEventListener('input', applyFilter);
+        document.getElementById('filterFrom').addEventListener('change', applyFilter);
+        document.getElementById('filterTo').addEventListener('change', applyFilter);
 
         function resetFilter() {
             document.getElementById('searchTx').value = '';

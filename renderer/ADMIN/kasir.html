@@ -472,9 +472,19 @@
                 }
             }, 1000);
 
-            // Sync from Database every 0.5s to get digital menu orders instantly
-            setInterval(async () => {
-                const currentDrafts = await DB.load('draft_transaksi') || [];
+            // Gunakan onSnapshot (Realtime Listener) Firebase agar instan, BUKAN polling setInterval yang berat!
+            if (typeof DB.listen === 'function') {
+                DB.listen('draft_transaksi', (newData) => {
+                    handleNewDrafts(newData);
+                });
+            } else {
+                setInterval(async () => {
+                    const currentDrafts = await DB.load('draft_transaksi') || [];
+                    handleNewDrafts(currentDrafts);
+                }, 3000); // 3 detik fallback
+            }
+
+            function handleNewDrafts(currentDrafts) {
                 const newOrdersCount = currentDrafts.filter(d => d.isNewOrder).length;
                 
                 const badge = document.getElementById('draftNotifBadge');
@@ -485,7 +495,6 @@
 
                 const modal = document.getElementById('modalDraft');
                 if (modal && !modal.classList.contains('hidden')) {
-                    // re-render if count changes or there's anew order
                     const hasNew = newOrdersCount > 0;
                     if (currentDrafts.length !== draftList.length || hasNew) {
                         draftList = currentDrafts;
@@ -494,7 +503,7 @@
                 } else {
                     draftList = currentDrafts;
                 }
-            }, 500);
+            }
         }
 
         function toggleSidebar() {
@@ -551,7 +560,13 @@
             `).join('');
         }
 
-        document.getElementById('searchProduk').addEventListener('input', () => renderProducts(produkList));
+        let searchTimeout;
+        document.getElementById('searchProduk').addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                renderProducts(produkList);
+            }, 300); // 300ms debounce anti lag
+        });
 
         function addToCartTrigger(id) {
             const p = produkList.find(x => x.id === id);

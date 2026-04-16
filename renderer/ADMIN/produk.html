@@ -402,7 +402,13 @@
             `).join('');
         }
 
-        document.getElementById('searchProduk').addEventListener('input', () => renderTable(produkList));
+        let searchTimeout;
+        document.getElementById('searchProduk').addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                renderTable(produkList);
+            }, 300);
+        });
 
         function renderKategoriOptions() {
             const select = document.getElementById('fKategori');
