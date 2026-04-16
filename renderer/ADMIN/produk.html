@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="id">
 
 <head>
@@ -333,10 +333,21 @@
         }
 
         let produkList = [], kategoriList = [];
+        const DEFAULT_KATEGORI = ['Makanan', 'Minuman', 'Cemilan', 'Paket', 'Lainnya'];
 
         async function init() {
-            produkList = await DB.load('produk');
-            kategoriList = await DB.load('kategori');
+            try {
+                produkList = await DB.load('produk') || [];
+                kategoriList = await DB.load('kategori') || [];
+                // Fallback jika kategori kosong
+                if (!Array.isArray(kategoriList) || kategoriList.length === 0) {
+                    kategoriList = [...DEFAULT_KATEGORI];
+                }
+            } catch(e) {
+                console.error('[Produk] Init error:', e);
+                produkList = produkList || [];
+                kategoriList = [...DEFAULT_KATEGORI];
+            }
             renderTable(produkList);
             renderKategoriOptions();
         }
@@ -458,14 +469,21 @@
             document.getElementById('editId').value = id || '';
             const preview = document.getElementById('imgPreview');
             const placeholder = document.getElementById('uploadPlaceholder');
+
+            // Pastikan dropdown kategori selalu terisi sebelum modal dibuka
+            renderKategoriOptions();
             
             if (id) {
                 const p = produkList.find(x => x.id === id);
+                if (!p) { alert('Produk tidak ditemukan!'); return; }
                 document.getElementById('fNama').value = p.nama;
-                document.getElementById('fKategori').value = p.kategori;
                 document.getElementById('fHarga').value = p.harga;
                 document.getElementById('fVarian').value = (p.variasi || []).join(', ');
                 document.getElementById('fCatatan').value = p.catatan || '';
+                // Set kategori setelah options terisi
+                setTimeout(() => {
+                    document.getElementById('fKategori').value = p.kategori;
+                }, 0);
                 
                 if (p.gambar) {
                     preview.src = p.gambar;
@@ -477,13 +495,17 @@
                 }
             } else {
                 document.getElementById('fNama').value = '';
-                document.getElementById('fKategori').value = 'Makanan';
                 document.getElementById('fHarga').value = '';
                 document.getElementById('fVarian').value = '';
                 document.getElementById('fCatatan').value = '';
                 document.getElementById('fGambar').value = '';
                 preview.classList.add('hidden');
                 placeholder.classList.remove('hidden');
+                // Set ke option pertama yang tersedia
+                setTimeout(() => {
+                    const sel = document.getElementById('fKategori');
+                    if (sel.options.length > 0) sel.selectedIndex = 0;
+                }, 0);
             }
             document.getElementById('modalProduk').classList.remove('hidden');
             document.getElementById('modalProduk').classList.add('flex');
@@ -498,27 +520,44 @@
 
         async function saveProduk() {
             const nama = document.getElementById('fNama').value.trim();
-            const kategori = document.getElementById('fKategori').value;
-            const harga = parseFloat(document.getElementById('fHarga').value);
+            const kategori = document.getElementById('fKategori').value || (kategoriList[0] || 'Makanan');
+            const hargaRaw = document.getElementById('fHarga').value;
+            const harga = parseFloat(hargaRaw);
             const varianRaw = document.getElementById('fVarian').value;
             const variasi = varianRaw ? varianRaw.split(',').map(v => v.trim()).filter(v => v) : [];
             const catatan = document.getElementById('fCatatan').value.trim();
-            const gambar = document.getElementById('imgPreview').classList.contains('hidden') ? '' : document.getElementById('imgPreview').src;
+            const imgPreview = document.getElementById('imgPreview');
+            const gambar = imgPreview.classList.contains('hidden') ? '' : imgPreview.src;
 
-            if (!nama || isNaN(harga)) { alert('Lengkapi semua field!'); return; }
+            // Validasi
+            if (!nama) { alert('Nama produk tidak boleh kosong!'); document.getElementById('fNama').focus(); return; }
+            if (hargaRaw === '' || isNaN(harga) || harga < 0) { alert('Harga harus diisi dengan angka yang valid!'); document.getElementById('fHarga').focus(); return; }
+
+            // Disable tombol sementara untuk mencegah double click
+            const btn = document.querySelector('button[onclick="saveProduk()"]');
+            if (btn) { btn.disabled = true; btn.textContent = 'Menyimpan...'; }
             
-            const editId = document.getElementById('editId').value;
-            if (editId) {
-                const idx = produkList.findIndex(x => x.id == editId);
-                if (idx !== -1) {
-                    produkList[idx] = { ...produkList[idx], nama, kategori, harga, variasi, catatan, gambar };
+            try {
+                const editId = document.getElementById('editId').value;
+                if (editId) {
+                    const idx = produkList.findIndex(x => x.id == editId);
+                    if (idx !== -1) {
+                        produkList[idx] = { ...produkList[idx], nama, kategori, harga, variasi, catatan, gambar };
+                    }
+                } else {
+                    // Fallback genId jika tidak tersedia dari app.js
+                    const newId = (typeof genId === 'function') ? genId() : (Date.now() + Math.floor(Math.random() * 1000));
+                    produkList.push({ id: newId, nama, kategori, harga, variasi, catatan, gambar });
                 }
-            } else {
-                produkList.push({ id: genId(), nama, kategori, harga, variasi, catatan, gambar });
+                await DB.save('produk', produkList);
+                closeModal();
+                renderTable(produkList);
+            } catch(e) {
+                console.error('[saveProduk] Error:', e);
+                alert('Gagal menyimpan produk: ' + e.message);
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Simpan Menu'; }
             }
-            await DB.save('produk', produkList);
-            closeModal();
-            renderTable(produkList);
         }
 
         function openHapus(id) {
